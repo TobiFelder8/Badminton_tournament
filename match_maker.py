@@ -10,57 +10,310 @@ Session(app)
 
 TEMPLATE_INDEX = """
 <!doctype html>
-<title>Matchmaking - Spieler</title>
-<h3>Spieler eintragen</h3>
-<form method=post action="{{ url_for('schedule') }}">
-  <textarea name=players rows=12 cols=40 placeholder="Ein Name pro Zeile oder durch Komma getrennt">{{ example }}</textarea><br>
-  <button type=submit>Weiter</button>
-</form>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Matchmaking - Spieler</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            height: fit-content;
+        }
+        h3 {
+            color: #111827;
+            margin-top: 0;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        textarea {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-family: inherit;
+            font-size: 1rem;
+            box-sizing: border-box;
+            resize: vertical;
+            min-height: 200px;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        button {
+            background-color: #2563eb;
+            color: white;
+            padding: 1rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .hint {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>🏸 Badminton Matchmaker</h3>
+        <p class="hint">Trage die Namen der Spieler ein (einer pro Zeile)</p>
+        <form method=post action="{{ url_for('schedule') }}">
+            <textarea name=players placeholder="Max Mustermann&#10;Erika Musterfrau&#10;...">{{ example }}</textarea>
+            <button type=submit>Turnier starten</button>
+        </form>
+    </div>
+</body>
+</html>
 """
 
 TEMPLATE_SCHEDULE = """
 <!doctype html>
-<title>Spielplan & Live-Rangliste</title>
-<h2>Live-Rangliste</h2>
-<table border=1 cellpadding=4>
-  <tr><th>Rang</th><th>Spieler</th><th>Punkte</th><th>Spiele</th><th>Tore+</th><th>Tore-</th><th>Diff</th></tr>
-  {% for i, row in enumerate(leaderboard, start=1) %}
-    <tr>
-      <td>{{ i }}</td>
-      <td>{{ row.name }}</td>
-      <td>{{ row.points }}</td>
-      <td>{{ row.played }}</td>
-      <td>{{ row.gf }}</td>
-      <td>{{ row.ga }}</td>
-      <td>{{ row.gf - row.ga }}</td>
-    </tr>
-  {% endfor %}
-</table>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Spielplan & Live-Rangliste</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding-bottom: 80px; /* Space for sticky footer */
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        h2, h3, h4 { color: #111827; margin-top: 0; }
+        h2 { border-bottom: 2px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+        
+        /* Table Styles */
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background-color: #f9fafb; font-weight: 600; color: #4b5563; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background-color: #f9fafb; }
+        
+        /* Match Styles */
+        .round-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            color: #4b5563;
+            font-weight: 600;
+            margin-top: 1.5rem;
+        }
+        .round-header:first-child { margin-top: 0; }
+        
+        .round-badge {
+            background: #e0e7ff;
+            color: #4338ca;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            margin-right: 0.75rem;
+        }
+        .match-list { list-style: none; padding: 0; margin: 0; }
+        .match-item {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .match-players {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+            font-weight: 500;
+            min-width: 200px;
+        }
+        .vs { color: #9ca3af; font-size: 0.875rem; margin: 0 0.5rem; }
+        .score-inputs { display: flex; align-items: center; gap: 0.5rem; }
+        input[type="number"] {
+            width: 60px;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        input[type="number"]:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        .freilos { color: #6b7280; font-style: italic; width: 100%; }
+        
+        /* Floating Action Button or Sticky Footer for Save */
+        .save-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 860px;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #e5e7eb;
+            z-index: 100;
+        }
+        button.save-btn {
+            background-color: #10b981;
+            color: white;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s;
+        }
+        button.save-btn:hover { background-color: #059669; transform: translateY(-1px); }
+        
+        .back-link { color: #6b7280; text-decoration: none; font-size: 0.875rem; display: flex; align-items: center; font-weight: 500; }
+        .back-link:hover { color: #111827; }
+        
+        @media (max-width: 600px) {
+            .match-item { flex-direction: column; align-items: stretch; text-align: center; }
+            .match-players { justify-content: center; margin-bottom: 0.5rem; }
+            .score-inputs { justify-content: center; }
+            .save-bar { flex-direction: column; gap: 1rem; bottom: 10px; width: calc(100% - 40px); }
+            .save-btn { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h2>🏆 Live-Rangliste</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Spieler</th>
+                            <th>Punkte</th>
+                            <th>Spiele</th>
+                            <th>Tore+</th>
+                            <th>Tore-</th>
+                            <th>Diff</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for i, row in enumerate(leaderboard, start=1) %}
+                        <tr>
+                            <td><strong>{{ i }}</strong></td>
+                            <td>{{ row.name }}</td>
+                            <td><strong>{{ row.points }}</strong></td>
+                            <td>{{ row.played }}</td>
+                            <td>{{ row.gf }}</td>
+                            <td>{{ row.ga }}</td>
+                            <td style="color: {{ 'green' if (row.gf - row.ga) > 0 else 'red' if (row.gf - row.ga) < 0 else 'inherit' }}">{{ row.gf - row.ga }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-<hr>
-<h3>Spielplan ({{ rounds | length }} Runden)</h3>
-<form method="post" action="{{ url_for('submit_scores') }}">
-{% for r_idx, rnd in enumerate(rounds) %}
-  <h4>Runde {{ r_idx + 1 }}</h4>
-  <ul>
-  {% for m_idx, match in enumerate(rnd) %}
-    {% set a, b = match %}
-    <li>
-      {% if b == 'Freilos' %}
-        <strong>{{ a }}</strong> hat ein Freilos
-      {% else %}
-        {{ a }} <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_a" min=0 value="{{ scores.get(key(r_idx,m_idx,'a'), '') }}"> :
-        <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_b" min=0 value="{{ scores.get(key(r_idx,m_idx,'b'), '') }}"> {{ b }}
-        <small> (Id: {{ r_idx }}-{{ m_idx }})</small>
-      {% endif %}
-    </li>
-  {% endfor %}
-  </ul>
-{% endfor %}
-  <button type="submit">Punkte speichern</button>
-</form>
-
-<p><a href="{{ url_for('index') }}">Zurück</a></p>
+        <form method="post" action="{{ url_for('submit_scores') }}">
+            <div class="card">
+                <h2>📅 Spielplan ({{ rounds | length }} Runden)</h2>
+                {% for r_idx, rnd in enumerate(rounds) %}
+                    <div class="round-section">
+                        <div class="round-header">
+                            <span class="round-badge">Runde {{ r_idx + 1 }}</span>
+                        </div>
+                        <div class="match-list">
+                        {% for m_idx, match in enumerate(rnd) %}
+                            {% set a, b = match %}
+                            <div class="match-item">
+                                {% if b == 'Freilos' %}
+                                    <div class="freilos"><strong>{{ a }}</strong> hat spielfrei</div>
+                                {% else %}
+                                    <div class="match-players">
+                                        <span>{{ a }}</span>
+                                        <span class="vs">vs</span>
+                                        <span>{{ b }}</span>
+                                    </div>
+                                    <div class="score-inputs">
+                                        <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_a" min=0 placeholder="0" value="{{ scores.get(key(r_idx,m_idx,'a'), '') }}">
+                                        <span>:</span>
+                                        <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_b" min=0 placeholder="0" value="{{ scores.get(key(r_idx,m_idx,'b'), '') }}">
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <div class="save-bar">
+                <a href="{{ url_for('index') }}" class="back-link">← Zurück zum Start</a>
+                <button type="submit" class="save-btn">Ergebnisse speichern</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
 """
 
 def normalize_input(text):
@@ -190,7 +443,30 @@ def schedule():
             seen.add(p)
             uniq.append(p)
     if len(uniq) < 2:
-        return "<p>Mindestens 2 unterschiedliche Spieler nötig. <a href='/'>Zurück</a></p>"
+        return """
+        <!doctype html>
+        <html lang="de">
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Fehler</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+                .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); text-align: center; max-width: 400px; }
+                h3 { color: #ef4444; margin-top: 0; }
+                a { color: #2563eb; text-decoration: none; font-weight: 600; }
+                a:hover { text-decoration: underline; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h3>⚠️ Zu wenige Spieler</h3>
+                <p>Es werden mindestens 2 unterschiedliche Spieler benötigt, um ein Turnier zu starten.</p>
+                <p><a href='/'>Zurück zur Eingabe</a></p>
+            </div>
+        </body>
+        </html>
+        """
     init_state(uniq)
     return redirect(url_for('show_schedule'))
 
@@ -201,7 +477,7 @@ def show_schedule():
     apply_scores_to_stats()
     leaderboard = compute_leaderboard()
     # helper for template to fetch keys
-    return render_template_string(TEMPLATE_SCHEDULE, rounds=rounds, scores=scores, leaderboard=leaderboard, key=key)
+    return render_template_string(TEMPLATE_SCHEDULE, rounds=rounds, scores=scores, leaderboard=leaderboard, key=key, enumerate=enumerate)
 
 @app.route('/submit_scores', methods=['POST'])
 def submit_scores():
