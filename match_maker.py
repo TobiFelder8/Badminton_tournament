@@ -14,7 +14,7 @@ TEMPLATE_INDEX = """
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Matchmaking - Spieler</title>
+    <title>Matchmaking - Teams</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -90,10 +90,10 @@ TEMPLATE_INDEX = """
 </head>
 <body>
     <div class="container">
-        <h3>🏸 Badminton Matchmaker</h3>
-        <p class="hint">Trage die Namen der Spieler ein (einer pro Zeile)</p>
+        <h3>🏸 Badminton Matchmaker (Doppel)</h3>
+        <p class="hint">Trage die Teams ein (ein Team pro Zeile, z.B. "Anna & Bert")</p>
         <form method=post action="{{ url_for('schedule') }}">
-            <textarea name=players placeholder="Max Mustermann&#10;Erika Musterfrau&#10;...">{{ example }}</textarea>
+            <textarea name=players placeholder="Team A (Max & Moritz)&#10;Team B (Susi & Strolch)&#10;...">{{ example }}</textarea>
             <button type=submit>Turnier starten</button>
         </form>
     </div>
@@ -248,11 +248,11 @@ TEMPLATE_SCHEDULE = """
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Spieler</th>
+                            <th>Team</th>
                             <th>Punkte</th>
                             <th>Spiele</th>
-                            <th>Tore+</th>
-                            <th>Tore-</th>
+                            <th>Spielpunkte+</th>
+                            <th>Spielpunkte-</th>
                             <th>Diff</th>
                         </tr>
                     </thead>
@@ -275,8 +275,37 @@ TEMPLATE_SCHEDULE = """
 
         <form method="post" action="{{ url_for('submit_scores') }}">
             <div class="card">
-                <h2>📅 Spielplan ({{ rounds | length }} Runden)</h2>
-                {% for r_idx, rnd in enumerate(rounds) %}
+                <h2>📅 Aktuelle Runde (Runde {{ completed_rounds | length + 1 }})</h2>
+                <div class="round-section">
+                    <div class="match-list">
+                    {% for m_idx, match in enumerate(current_round) %}
+                        {% set a, b = match %}
+                        {% set r_idx = completed_rounds | length %}
+                        <div class="match-item">
+                            {% if b == 'Freilos' %}
+                                <div class="freilos"><strong>{{ a }}</strong> hat spielfrei</div>
+                            {% else %}
+                                <div class="match-players">
+                                    <span>{{ a }}</span>
+                                    <span class="vs">vs</span>
+                                    <span>{{ b }}</span>
+                                </div>
+                                <div class="score-inputs">
+                                    <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_a" min=0 placeholder="0" value="{{ scores.get(key(r_idx,m_idx,'a'), '') }}" required>
+                                    <span>:</span>
+                                    <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_b" min=0 placeholder="0" value="{{ scores.get(key(r_idx,m_idx,'b'), '') }}" required>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            {% if completed_rounds %}
+            <div class="card">
+                <h2>📜 Vergangene Runden</h2>
+                {% for r_idx, rnd in enumerate(completed_rounds) %}
                     <div class="round-section">
                         <div class="round-header">
                             <span class="round-badge">Runde {{ r_idx + 1 }}</span>
@@ -284,9 +313,9 @@ TEMPLATE_SCHEDULE = """
                         <div class="match-list">
                         {% for m_idx, match in enumerate(rnd) %}
                             {% set a, b = match %}
-                            <div class="match-item">
+                            <div class="match-item" style="opacity: 0.8;">
                                 {% if b == 'Freilos' %}
-                                    <div class="freilos"><strong>{{ a }}</strong> hat spielfrei</div>
+                                    <div class="freilos"><strong>{{ a }}</strong> hatte spielfrei</div>
                                 {% else %}
                                     <div class="match-players">
                                         <span>{{ a }}</span>
@@ -294,9 +323,9 @@ TEMPLATE_SCHEDULE = """
                                         <span>{{ b }}</span>
                                     </div>
                                     <div class="score-inputs">
-                                        <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_a" min=0 placeholder="0" value="{{ scores.get(key(r_idx,m_idx,'a'), '') }}">
+                                        <span style="font-weight: bold; font-size: 1.1rem;">{{ scores.get(key(r_idx,m_idx,'a'), '-') }}</span>
                                         <span>:</span>
-                                        <input type="number" name="score_{{ r_idx }}_{{ m_idx }}_b" min=0 placeholder="0" value="{{ scores.get(key(r_idx,m_idx,'b'), '') }}">
+                                        <span style="font-weight: bold; font-size: 1.1rem;">{{ scores.get(key(r_idx,m_idx,'b'), '-') }}</span>
                                     </div>
                                 {% endif %}
                             </div>
@@ -305,10 +334,11 @@ TEMPLATE_SCHEDULE = """
                     </div>
                 {% endfor %}
             </div>
+            {% endif %}
             
             <div class="save-bar">
-                <a href="{{ url_for('index') }}" class="back-link">← Zurück zum Start</a>
-                <button type="submit" class="save-btn">Ergebnisse speichern</button>
+                <a href="{{ url_for('index') }}" class="back-link">← Neustart</a>
+                <button type="submit" class="save-btn">Runde beenden & Nächste Runde</button>
             </div>
         </form>
     </div>
@@ -319,55 +349,77 @@ TEMPLATE_SCHEDULE = """
 def normalize_input(text):
     parts = []
     for line in text.splitlines():
-        for sub in line.split(','):
-            name = sub.strip()
-            if name:
-                parts.append(name)
+        name = line.strip()
+        if name:
+            parts.append(name)
     return parts
 
-def round_robin(players):
-    n = len(players)
-    if n % 2 == 1:
-        players = players + ['Freilos']
-        n += 1
-    half = n // 2
-    players_list = list(players)
-    rounds = []
-    for r in range(n - 1):
-        pairings = []
-        for i in range(half):
-            a = players_list[i]
-            b = players_list[n - 1 - i]
-            pairings.append((a, b))
-        rounds.append(pairings)
-        players_list = [players_list[0]] + players_list[-1:] + players_list[1:-1]
-    return rounds
+def generate_next_round(players, past_pairings, stats):
+    # Swiss System pairing
+    # 1. Sort players by points (desc), then goal diff, then goals for
+    sorted_players = sorted(players, key=lambda p: (
+        -stats[p]['points'], 
+        -(stats[p]['gf'] - stats[p]['ga']), 
+        -stats[p]['gf'],
+        random.random() # shuffle equals
+    ))
+    
+    pairings = []
+    used = set()
+    
+    # Handle odd number of players with a Bye (Freilos)
+    # Give bye to the lowest ranked player who hasn't had one yet
+    # For simplicity in this version, we just give it to the last one if odd
+    if len(sorted_players) % 2 == 1:
+        # Find lowest ranked player for bye
+        bye_player = sorted_players.pop()
+        pairings.append((bye_player, 'Freilos'))
+        used.add(bye_player)
 
-def make_double_round_robin(players):
-    base_rounds = round_robin(players)
-    mirrored = []
-    for rnd in base_rounds:
-        mirrored.append([(b,a) for (a,b) in rnd])
-    combined = []
-    for a, b in zip(base_rounds, mirrored):
-        combined.append(a)
-        combined.append(b)
-    # shuffle blocks to reduce repeats
-    blocks = [combined[i:i+2] for i in range(0, len(combined), 2)]
-    random.shuffle(blocks)
-    new_rounds = []
-    for block in blocks:
-        for rnd in block:
-            new_rounds.append(rnd)
-    return new_rounds
+    while len(sorted_players) >= 2:
+        p1 = sorted_players.pop(0)
+        if p1 in used: continue
+        
+        # Find best opponent
+        opponent = None
+        for i, p2 in enumerate(sorted_players):
+            # Check if they played before
+            pair = tuple(sorted((p1, p2)))
+            if pair not in past_pairings:
+                opponent = p2
+                sorted_players.pop(i)
+                break
+        
+        if opponent is None:
+            # Fallback: if everyone played everyone, just take the next best
+            # This might happen in small tournaments with many rounds
+            opponent = sorted_players.pop(0)
+            
+        pairings.append((p1, opponent))
+        used.add(p1)
+        used.add(opponent)
+        
+    return pairings
 
 def init_state(players):
     session['players'] = players
-    session['rounds'] = make_double_round_robin(players)
-    # scores: dict key "r_m_side" -> integer (e.g., "0_1_a")
-    session['scores'] = {}
-    # stats for leaderboard
+    session['completed_rounds'] = [] # List of rounds (which are lists of matches)
+    session['current_round'] = []    # The active round
+    session['past_pairings'] = []    # List of tuples (a, b) sorted
+    session['scores'] = {}           # Global scores dict
     session['stats'] = {p: {'points':0, 'played':0, 'gf':0, 'ga':0} for p in players}
+    
+    # Generate first round (Random)
+    random.shuffle(players)
+    first_round = []
+    if len(players) % 2 == 1:
+        bye = players.pop()
+        first_round.append((bye, 'Freilos'))
+    
+    for i in range(0, len(players), 2):
+        first_round.append((players[i], players[i+1]))
+        
+    session['current_round'] = first_round
 
 def compute_leaderboard():
     stats = session.get('stats', {})
@@ -387,35 +439,32 @@ def compute_leaderboard():
 def key(r, m, side):
     return f"{r}_{m}_{side}"
 
-def apply_scores_to_stats():
-    # reset stats and recompute from scratch from session['scores']
-    players = session.get('players', [])
-    rounds = session.get('rounds', [])
-    scores = session.get('scores', {})
-    stats = {p: {'points':0, 'played':0, 'gf':0, 'ga':0} for p in players}
-    for r_idx, rnd in enumerate(rounds):
-        for m_idx, match in enumerate(rnd):
-            a, b = match
-            if b == 'Freilos':
-                # Freilos: keine Änderung ausser ev. give 3 points? We'll give 3 points to bye
-                stats[a]['points'] += 3
-                continue
-            ka = key(r_idx, m_idx, 'a')
-            kb = key(r_idx, m_idx, 'b')
-            if ka in scores and kb in scores:
-                try:
-                    sa = int(scores[ka])
-                    sb = int(scores[kb])
-                except ValueError:
-                    continue
-                # update gf/ga/played
+def update_stats_with_round(round_idx, round_matches, scores):
+    stats = session.get('stats')
+    players = session.get('players')
+    
+    for m_idx, match in enumerate(round_matches):
+        a, b = match
+        if b == 'Freilos':
+            stats[a]['points'] += 3
+            stats[a]['played'] += 1
+            continue
+            
+        ka = key(round_idx, m_idx, 'a')
+        kb = key(round_idx, m_idx, 'b')
+        
+        if ka in scores and kb in scores:
+            try:
+                sa = int(scores[ka])
+                sb = int(scores[kb])
+                
                 stats[a]['gf'] += sa
                 stats[a]['ga'] += sb
                 stats[b]['gf'] += sb
                 stats[b]['ga'] += sa
                 stats[a]['played'] += 1
                 stats[b]['played'] += 1
-                # assign points: win 3, draw 2, loss 1
+                
                 if sa > sb:
                     stats[a]['points'] += 3
                     stats[b]['points'] += 1
@@ -425,11 +474,13 @@ def apply_scores_to_stats():
                 else:
                     stats[a]['points'] += 1
                     stats[b]['points'] += 3
+            except ValueError:
+                pass
     session['stats'] = stats
 
 @app.route('/')
 def index():
-    example = "Anna\nBenedikt\nCarla\nDaniel\nEva\nFelix"
+    example = "Team A (Anna & Ben)\nTeam B (Carla & Dan)\nTeam C (Eva & Flo)"
     return render_template_string(TEMPLATE_INDEX, example=example)
 
 @app.route('/schedule', methods=['POST'])
@@ -460,8 +511,8 @@ def schedule():
         </head>
         <body>
             <div class="card">
-                <h3>⚠️ Zu wenige Spieler</h3>
-                <p>Es werden mindestens 2 unterschiedliche Spieler benötigt, um ein Turnier zu starten.</p>
+                <h3>⚠️ Zu wenige Teams</h3>
+                <p>Es werden mindestens 2 unterschiedliche Teams benötigt, um ein Turnier zu starten.</p>
                 <p><a href='/'>Zurück zur Eingabe</a></p>
             </div>
         </body>
@@ -472,34 +523,79 @@ def schedule():
 
 @app.route('/schedule_view')
 def show_schedule():
-    rounds = session.get('rounds', [])
+    if 'players' not in session:
+        return redirect(url_for('index'))
+        
+    completed_rounds = session.get('completed_rounds', [])
+    current_round = session.get('current_round', [])
     scores = session.get('scores', {})
-    apply_scores_to_stats()
     leaderboard = compute_leaderboard()
-    # helper for template to fetch keys
-    return render_template_string(TEMPLATE_SCHEDULE, rounds=rounds, scores=scores, leaderboard=leaderboard, key=key, enumerate=enumerate)
+    
+    return render_template_string(
+        TEMPLATE_SCHEDULE, 
+        completed_rounds=completed_rounds, 
+        current_round=current_round, 
+        scores=scores, 
+        leaderboard=leaderboard, 
+        key=key, 
+        enumerate=enumerate
+    )
 
 @app.route('/submit_scores', methods=['POST'])
 def submit_scores():
-    rounds = session.get('rounds', [])
+    current_round = session.get('current_round', [])
+    completed_rounds = session.get('completed_rounds', [])
     scores = session.get('scores', {})
-    # read all numeric inputs and store
-    for r_idx, rnd in enumerate(rounds):
-        for m_idx, match in enumerate(rnd):
-            a, b = match
-            if b == 'Freilos':
-                continue
-            ka = key(r_idx, m_idx, 'a')
-            kb = key(r_idx, m_idx, 'b')
-            va = request.form.get(f"score_{r_idx}_{m_idx}_a", "").strip()
-            vb = request.form.get(f"score_{r_idx}_{m_idx}_b", "").strip()
-            if va != "":
-                scores[ka] = va
-            if vb != "":
-                scores[kb] = vb
+    
+    # Determine the index for the current round (it's the next one after completed ones)
+    current_round_idx = len(completed_rounds)
+    
+    # Read scores for current round
+    all_scores_entered = True
+    for m_idx, match in enumerate(current_round):
+        a, b = match
+        if b == 'Freilos':
+            continue
+            
+        ka = key(current_round_idx, m_idx, 'a')
+        kb = key(current_round_idx, m_idx, 'b')
+        
+        va = request.form.get(f"score_{current_round_idx}_{m_idx}_a", "").strip()
+        vb = request.form.get(f"score_{current_round_idx}_{m_idx}_b", "").strip()
+        
+        if va == "" or vb == "":
+            all_scores_entered = False
+        else:
+            scores[ka] = va
+            scores[kb] = vb
+            
     session['scores'] = scores
-    apply_scores_to_stats()
+    
+    if not all_scores_entered:
+        # Just save partial scores, don't advance
+        return redirect(url_for('show_schedule'))
+        
+    # If all scores entered, finalize round
+    update_stats_with_round(current_round_idx, current_round, scores)
+    
+    # Archive current round
+    completed_rounds.append(current_round)
+    session['completed_rounds'] = completed_rounds
+    
+    # Update past pairings
+    past_pairings = session.get('past_pairings', [])
+    for a, b in current_round:
+        if b != 'Freilos':
+            past_pairings.append(tuple(sorted((a, b))))
+    session['past_pairings'] = past_pairings
+    
+    # Generate next round
+    players = session.get('players')
+    stats = session.get('stats')
+    next_round = generate_next_round(list(players), set(past_pairings), stats)
+    session['current_round'] = next_round
+    
     return redirect(url_for('show_schedule'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)
